@@ -3,15 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class CNN(nn.Module):
-    def __init__(self, echar, embed_size, k):
+    def __init__(self, input, embed_size, k):
         """Initialize CNN layer
         
-        @param echar (int): Embedding size of the characters
+        @param input (int): Size of input layer
         @param embed_size (int): Output embedding size of CNN
         @param k (int): kernel size
         """
         super(CNN, self).__init__()
-        self.conv = nn.Conv1d(echar, embed_size, k)
+        self.conv = nn.Conv1d(input, embed_size, k)
     
     def forward(self, xin):
         """Go forward in CNN

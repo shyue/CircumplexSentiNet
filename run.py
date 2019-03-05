@@ -9,20 +9,35 @@ import torch.nn.functional as F
 import torch.optim as optim
 from argparse import ArgumentParser
 import pandas as pd
-from models.CNNBaselineModel import CNNBaselineModel
+from models.BiLSTMCNN import BiLSTMCNN
+from vocab import *
+import random
+import time
 
 EMBED_SIZE = 9
 KERNEL_SIZE = 5
 VALENCE_MODEL = "model_weights/valence_model"
 AROUSAL_MODEL = "model_weights/arousal_model"
+BATCH_SIZE = 32
+INPUT_SIZE = 100
+HIDDEN_SIZE = 1024
+
 
 def train(file):
     sentences = pd.read_csv(file).dropna()
-    vocab, id_sents, valences, arousals = char2id(sentences)
-    id_sents = pad_sents(id_sents, KERNEL_SIZE, vocab)
+    valences, arousals = extract_labels(sentences)
+    sentences = read_sents(sentences)
+    print(valences)
+    print("Loading glove vectors")
+    glove = load_glove_vectors()
+    pad = [0.0 for i in range(INPUT_SIZE)]
+    print("Finished loading vectors")
     
-    model_valence = CNNBaselineModel(EMBED_SIZE, vocab, KERNEL_SIZE)
-    model_arousal = CNNBaselineModel(EMBED_SIZE, vocab, KERNEL_SIZE)
+    random.seed(42)
+    
+    
+    model_valence = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
+    model_arousal = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
     
     criterion_valence = nn.CrossEntropyLoss()
     criterion_arousal = nn.CrossEntropyLoss()
@@ -32,22 +47,36 @@ def train(file):
     model_valence.train()
     model_arousal.train()
     
+    indexes = [i for i in range(len(sentences))]
+    t0 = time.time()
     #based on PyTorch tutorial: https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
-    for epoch in range(30):  # loop over the dataset multiple times
- 
+    for epoch in range(100):  # loop over the dataset multiple times
+        random.shuffle(indexes)
+        
         running_loss = 0.0
-        for i, data in enumerate(id_sents):
+        for i in range(len(sentences)//BATCH_SIZE):
+            
             # get the inputs
-            inputs = data.view(1, data.shape[0])
-            labels_arousal = torch.tensor([arousals[i]-1], dtype=torch.long)
-            labels_valence = torch.tensor([valences[i]-1], dtype=torch.long)
+            
+            inputs = [sentences[i] for i in indexes[i*BATCH_SIZE:(i+1)*BATCH_SIZE]]
+            inputs, lengths = pad_sents(inputs)
+            inputs = [[glove[word] if word in glove else pad for word in sent] for sent in inputs]
+            inputs = torch.tensor(inputs)
+            inputs = inputs.permute(1, 0, 2)
+
+            labels_valence = [valences[i] for i in indexes[i*BATCH_SIZE:(i+1)*BATCH_SIZE]]
+            labels_valence = torch.tensor(labels_valence, dtype=torch.long)
+            
+            labels_arousal = [arousals[i] for i in indexes[i*BATCH_SIZE:(i+1)*BATCH_SIZE]]
+            labels_arousal = torch.tensor(labels_arousal, dtype=torch.long)
+            
             # zero the parameter gradients
             optimizer_valence.zero_grad()
             optimizer_arousal.zero_grad()
 
             # forward + backward + optimize
-            outputs_valence = model_valence(inputs)
-            outputs_arousal = model_arousal(inputs)
+            outputs_valence = model_valence(inputs, lengths)
+            outputs_arousal = model_arousal(inputs, lengths)
             
             loss_valence = criterion_valence(outputs_valence, labels_valence)
             loss_arousal = criterion_arousal(outputs_arousal, labels_arousal)
@@ -56,29 +85,33 @@ def train(file):
 
             optimizer_valence.step()
             optimizer_arousal.step()
-
+            
             # print statistics
             running_loss += loss.item()
-            if i % 400 == 399:    # print every 2000 mini-batches
-                print('[%d, %5d] loss: %.3f' %
-                      (epoch + 1, i + 1, running_loss / 400))
-                running_loss = 0.0
-
+            print(loss.item())
+            #if i % 400 == 399:    # print every 2000 mini-batches
+        print('[%d, %5d] loss: %.3f' %
+              (epoch + 1, i + 1, running_loss / (len(sentences)//BATCH_SIZE)))
+        print('time: '+str(time.time()-t0))
+        running_loss = 0.0
+            
     print('Finished Training')
     torch.save(model_valence.state_dict(), VALENCE_MODEL)
     torch.save(model_arousal.state_dict(), AROUSAL_MODEL)
-
+    
 
 def test(file):
     sentences = pd.read_csv(file).dropna()
-    vocab, id_sents, valences, arousals = char2id(sentences)
-    id_sents = pad_sents(id_sents, KERNEL_SIZE, vocab)
-    
-    model_valence = CNNBaselineModel(EMBED_SIZE, vocab, KERNEL_SIZE)
+    valences, arousals = extract_labels(sentences)
+    sentences = read_sents(sentences)
+    glove = load_glove_vectors()
+
+    """
+    model_valence = 
     model_valence.load_state_dict(torch.load(VALENCE_MODEL))
     model_valence.eval()
     
-    model_arousal = CNNBaselineModel(EMBED_SIZE, vocab, KERNEL_SIZE)
+    model_arousal = 
     model_arousal.load_state_dict(torch.load(AROUSAL_MODEL))
     model_arousal.eval()
 
@@ -97,44 +130,13 @@ def test(file):
     SSE_V = SSE_V/len(id_sents)
     SSE_A = SSE_A/len(id_sents)
     print(SSE_V, SSE_A)
+"""
 
-def pad_sents(id_sents, ksize, vocab):
-    for i, sent in enumerate(id_sents):
-        if sent.shape[0] < ksize:
-            new_sent = sent.tolist()
-            for j in range(ksize-len(new_sent)):
-                new_sent.append(vocab['<pad>'])
-            id_sents[i] = torch.tensor(new_sent)
-    return id_sents
-    
-def char2id(df):
-    char_list = list("""ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789,;.!?:'\"/\\|_@#$%^&*~`+-=<>()[]""")
-    vocab = dict()
-    vocab['<pad>'] = 0   
-    for c in char_list:
-        vocab[c] = len(vocab)
-    
-    id_sents = []
-    valences = []
-    arousals = []
-    for idx, row in df.iterrows():
-        msg = row['Anonymized Message']
-        valences.append( (int(row['Valence1'])+int(row['Valence2']))/2 )
-        arousals.append( (int(row['Arousal1'])+int(row['Arousal2']))/2 )
-        msg_id = []
-        for char in msg:
-            if char in vocab:
-                msg_id.append(vocab[char])
-            else:
-                msg_id.append(vocab['<pad>'])
-        id_sents.append(torch.tensor(msg_id))
-
-    return vocab, id_sents, valences, arousals
-    
 if __name__ == '__main__':
     parser =ArgumentParser()
     parser.add_argument("mode")
     parser.add_argument("-f", dest="fname")
+    parser.add_argument("-d", dest="data_split")
     args = parser.parse_args()
     
     if (args.fname == None):
