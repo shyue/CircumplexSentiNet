@@ -14,20 +14,20 @@ from vocab import *
 import random
 import time
 
-EMBED_SIZE = 9
+EMBED_SIZE = 17
 KERNEL_SIZE = 5
 VALENCE_MODEL = "model_weights/valence_model"
 AROUSAL_MODEL = "model_weights/arousal_model"
 BATCH_SIZE = 32
 INPUT_SIZE = 100
 HIDDEN_SIZE = 1024
-
+LEARNING_RATE = 0.001
 
 def train(file):
     sentences = pd.read_csv(file).dropna()
     valences, arousals = extract_labels(sentences)
     sentences = read_sents(sentences)
-    print(valences)
+    #print(valences)
     print("Loading glove vectors")
     glove = load_glove_vectors()
     pad = [0.0 for i in range(INPUT_SIZE)]
@@ -41,8 +41,8 @@ def train(file):
     
     criterion_valence = nn.CrossEntropyLoss()
     criterion_arousal = nn.CrossEntropyLoss()
-    optimizer_valence = optim.SGD(model_valence.parameters(), lr=0.001, momentum=0.9)
-    optimizer_arousal = optim.SGD(model_arousal.parameters(), lr=0.001, momentum=0.9)
+    optimizer_valence = optim.Adam(model_valence.parameters(), lr=LEARNING_RATE)#, momentum=0.9)
+    optimizer_arousal = optim.Adam(model_arousal.parameters(), lr=LEARNING_RATE)#, momentum=0.9)
     
     model_valence.train()
     model_arousal.train()
@@ -88,7 +88,7 @@ def train(file):
             
             # print statistics
             running_loss += loss.item()
-            print(loss.item())
+            #print(loss.item())
             #if i % 400 == 399:    # print every 2000 mini-batches
         print('[%d, %5d] loss: %.3f' %
               (epoch + 1, i + 1, running_loss / (len(sentences)//BATCH_SIZE)))

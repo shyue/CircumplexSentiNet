@@ -22,7 +22,7 @@ class BiLSTMCNN(nn.Module):
         
         self.lstm = nn.LSTM(input_size, hidden, bidirectional=True)
         self.cnn = CNN(2*hidden, embed_size, kernel)
-        self.dropout = nn.Dropout(dropout_rate)
+        #self.dropout = nn.Dropout(dropout_rate)
         ### END YOUR CODE
 
     def forward(self, input, lengths):
@@ -36,7 +36,7 @@ class BiLSTMCNN(nn.Module):
         xhidden = pad_packed_sequence(xhidden)[0]
         xhidden = xhidden.permute(1, 2, 0)
         xconv_out = self.cnn(xhidden)
-        output = self.dropout(xconv_out)
+        output = xconv_out #self.dropout(xconv_out)
         return output
 
 
