@@ -14,11 +14,11 @@ from vocab import *
 import random
 import time
 
-EMBED_SIZE = 17
+EMBED_SIZE = 256
 KERNEL_SIZE = 5
 VALENCE_MODEL = "model_weights/valence_model"
 AROUSAL_MODEL = "model_weights/arousal_model"
-BATCH_SIZE = 32
+BATCH_SIZE = 1
 INPUT_SIZE = 100
 HIDDEN_SIZE = 1024
 LEARNING_RATE = 0.001
@@ -39,8 +39,8 @@ def train(file):
     model_valence = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
     model_arousal = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
     
-    criterion_valence = nn.CrossEntropyLoss()
-    criterion_arousal = nn.CrossEntropyLoss()
+    criterion_valence = nn.MSELoss()
+    criterion_arousal = nn.MSELoss()
     optimizer_valence = optim.Adam(model_valence.parameters(), lr=LEARNING_RATE)#, momentum=0.9)
     optimizer_arousal = optim.Adam(model_arousal.parameters(), lr=LEARNING_RATE)#, momentum=0.9)
     
@@ -59,16 +59,16 @@ def train(file):
             # get the inputs
             
             inputs = [sentences[i] for i in indexes[i*BATCH_SIZE:(i+1)*BATCH_SIZE]]
-            inputs, lengths = pad_sents(inputs)
+            inputs, lengths = pad_sents(inputs, KERNEL_SIZE)
             inputs = [[glove[word] if word in glove else pad for word in sent] for sent in inputs]
             inputs = torch.tensor(inputs)
             inputs = inputs.permute(1, 0, 2)
 
             labels_valence = [valences[i] for i in indexes[i*BATCH_SIZE:(i+1)*BATCH_SIZE]]
-            labels_valence = torch.tensor(labels_valence, dtype=torch.long)
+            labels_valence = torch.tensor(labels_valence)
             
             labels_arousal = [arousals[i] for i in indexes[i*BATCH_SIZE:(i+1)*BATCH_SIZE]]
-            labels_arousal = torch.tensor(labels_arousal, dtype=torch.long)
+            labels_arousal = torch.tensor(labels_arousal)
             
             # zero the parameter gradients
             optimizer_valence.zero_grad()
@@ -88,12 +88,15 @@ def train(file):
             
             # print statistics
             running_loss += loss.item()
+            #print(outputs_valence)
+            #print(labels_valence)
             #print(loss.item())
-            #if i % 400 == 399:    # print every 2000 mini-batches
-        print('[%d, %5d] loss: %.3f' %
-              (epoch + 1, i + 1, running_loss / (len(sentences)//BATCH_SIZE)))
-        print('time: '+str(time.time()-t0))
-        running_loss = 0.0
+            if i % 400 == 399:    # print every 400 mini-batches
+                print('[%d, %5d] loss: %.3f' %
+                    (epoch + 1, i + 1, running_loss / 400))
+            running_loss = 0.0
+        print('epoch '+str(epoch)+' finished! time: '+str(time.time()-t0))
+        
             
     print('Finished Training')
     torch.save(model_valence.state_dict(), VALENCE_MODEL)

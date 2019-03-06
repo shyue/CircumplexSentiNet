@@ -25,8 +25,8 @@ def extract_labels(df):
     valences = []
     arousals = []
     for idx, row in df.iterrows():
-        valences.append( (int(row['Valence1'])+int(row['Valence2'])) -2)
-        arousals.append( (int(row['Arousal1'])+int(row['Arousal2'])) -2)
+        valences.append( (int(row['Valence1'])+int(row['Valence2'])) / 2 - 5)#(int(row['Valence1'])+int(row['Valence2'])) -2)
+        arousals.append( (int(row['Arousal1'])+int(row['Arousal2'])) / 2 - 5)#(int(row['Arousal1'])+int(row['Arousal2'])) -2)
     return valences, arousals
 
 def read_sents(df):
@@ -45,7 +45,7 @@ def read_sents(df):
         sents.append(curr_sent)
     return sents
     
-def pad_sents(sents):
+def pad_sents(sents, minLen):
     """
     reads in list of a list of lowercase words
     
@@ -54,7 +54,7 @@ def pad_sents(sents):
     """
     new_sents = copy.deepcopy(sents)
     new_sents.sort(reverse=True, key=len)
-    lengths = [len(s) for s in new_sents]
+    lengths = [max(len(s), minLen) for s in new_sents]
     max_len = max(lengths)
 
     for i in range(len(new_sents)):

@@ -2,6 +2,7 @@
 Runs word embeddings through bidirectional LSTM, and then CNN to classify
 """
 
+import torch
 import torch.nn as nn
 from models.cnn import CNN
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
@@ -19,9 +20,10 @@ class BiLSTMCNN(nn.Module):
         super(BiLSTMCNN, self).__init__()
         
         dropout_rate = 0.3
-        
+        self.linear = nn.Linear(embed_size, 1)
         self.lstm = nn.LSTM(input_size, hidden, bidirectional=True)
         self.cnn = CNN(2*hidden, embed_size, kernel)
+        #self.conv = nn.Conv1d(2*hidden, embed_size, kernel)
         #self.dropout = nn.Dropout(dropout_rate)
         ### END YOUR CODE
 
@@ -36,7 +38,11 @@ class BiLSTMCNN(nn.Module):
         xhidden = pad_packed_sequence(xhidden)[0]
         xhidden = xhidden.permute(1, 2, 0)
         xconv_out = self.cnn(xhidden)
-        output = xconv_out #self.dropout(xconv_out)
+        #xconv = self.conv(xhidden)
+        #xconv_out = torch.max(xconv, dim=2)[0]
+        #output = xconv_out #self.dropout(xconv_out)
+        output = self.linear(xconv_out)
+        output = torch.squeeze(output)
         return output
 
 
