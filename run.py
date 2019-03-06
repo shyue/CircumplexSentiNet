@@ -23,6 +23,8 @@ INPUT_SIZE = 100
 HIDDEN_SIZE = 1024
 LEARNING_RATE = 0.001
 PRINT_SIZE = 200
+PREDICTION_OUTPUT = "data/test_output.csv"
+NUM_EPOCHS = 30
 
 def train(file):
     sentences = pd.read_csv(file).dropna()
@@ -51,7 +53,7 @@ def train(file):
     indexes = [i for i in range(len(sentences))]
     t0 = time.time()
     #based on PyTorch tutorial: https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
-    for epoch in range(100):  # loop over the dataset multiple times
+    for epoch in range(NUM_EPOCHS):  # loop over the dataset multiple times
         random.shuffle(indexes)
         
         running_loss = 0.0
@@ -106,39 +108,76 @@ def train(file):
     print('Finished Training')
     torch.save(model_valence.state_dict(), VALENCE_MODEL)
     torch.save(model_arousal.state_dict(), AROUSAL_MODEL)
-    
+    print('Finished Saving Weights')
 
 def test(file):
     sentences = pd.read_csv(file).dropna()
     valences, arousals = extract_labels(sentences)
     sentences = read_sents(sentences)
+    #print(valences)
+    print("Loading glove vectors")
     glove = load_glove_vectors()
-
-    """
-    model_valence = 
+    pad = [0.0 for i in range(INPUT_SIZE)]
+    print("Finished loading vectors")
+    
+    
+    model_valence = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
     model_valence.load_state_dict(torch.load(VALENCE_MODEL))
     model_valence.eval()
     
-    model_arousal = 
+    model_arousal = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
     model_arousal.load_state_dict(torch.load(AROUSAL_MODEL))
     model_arousal.eval()
-
+    
+    pred_valence = []
+    pred_arousal = []
+    
+    t0 = time.time()
+    with torch.no_grad():
+        
+        for i, data in enumerate(sentences):
+            
+            # get the inputs
+            inputs = [data]
+            inputs, lengths = pad_sents(inputs, KERNEL_SIZE)
+            inputs = [[glove[word] if word in glove else pad for word in sent] for sent in inputs]
+            inputs = torch.tensor(inputs)
+            inputs = inputs.permute(1, 0, 2)
+            
+            """
+            labels_valence = [valences[i]]
+            labels_valence = torch.tensor(labels_valence)
+            
+            labels_arousal = [arousals[i]]
+            labels_arousal = torch.tensor(labels_arousal)
+            """
+            
+            outputs_valence = model_valence(inputs, lengths)
+            outputs_arousal = model_arousal(inputs, lengths)
+            
+            pred_valence.append(outputs_valence.tolist())
+            pred_arousal.append(outputs_arousal.tolist())
+        
+            
+    print('Finished Testing: '+str(time.time()-t0))
+        
     SSE_V = 0
     SSE_A = 0
+    pred_totals = []
     
-    with torch.no_grad():
-        for i, data in enumerate(id_sents):
-            inputs = data.view(1, data.shape[0])
-            outputs_valence = model_valence(inputs)
-            outputs_arousal = model_arousal(inputs)
-            labels_arousal = torch.tensor([arousals[i]], dtype=torch.long)
-            labels_valence = torch.tensor([valences[i]], dtype=torch.long)
-            SSE_V += (torch.max(outputs_valence, dim=1)[1]+1-labels_valence)*(torch.max(outputs_valence, dim=1)[1]+1-labels_valence)
-            SSE_A += (torch.max(outputs_arousal, dim=1)[1]+1-labels_arousal)*(torch.max(outputs_arousal, dim=1)[1]+1-labels_arousal)
-    SSE_V = SSE_V/len(id_sents)
-    SSE_A = SSE_A/len(id_sents)
-    print(SSE_V, SSE_A)
-"""
+    for i in range(len(sentences)):
+        curr_line = [sentences[i], valences[i]+5, pred_valence[i]+5, arousals[i]+5, pred_arousal[i]+5]
+        pred_totals.append(curr_line)
+        SSE_V += (valences[i]-pred_valence[i])**2
+        SSE_A += (arousals[i]-pred_arousal[i])**2
+    SSE_V = SSE_V/len(sentences)
+    SSE_A = SSE_A/len(sentences)
+    print("Valence MSE: "+str(SSE_V)+", Arousal MSE: "+str(SSE_A))
+    
+    df = pd.DataFrame(pred_totals, columns = ['Message', 'Valence Label', 'Valence Prediction', 'Arousal Label', 'Arousal Prediction'])
+    df.to_csv(PREDICTION_OUTPUT)
+    
+    print('Finished Writing Data')
 
 if __name__ == '__main__':
     parser =ArgumentParser()
