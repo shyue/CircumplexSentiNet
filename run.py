@@ -22,6 +22,7 @@ BATCH_SIZE = 1
 INPUT_SIZE = 100
 HIDDEN_SIZE = 1024
 LEARNING_RATE = 0.001
+PRINT_SIZE = 200
 
 def train(file):
     sentences = pd.read_csv(file).dropna()
@@ -90,11 +91,15 @@ def train(file):
             running_loss += loss.item()
             #print(outputs_valence)
             #print(labels_valence)
-            #print(loss.item())
-            if i % 400 == 399:    # print every 400 mini-batches
+            """print(loss.item())
+            print(loss.item())
+            print(running_loss)
+            print('---')"""
+            if i % PRINT_SIZE == PRINT_SIZE-1:    # print every 400 mini-batches
                 print('[%d, %5d] loss: %.3f' %
-                    (epoch + 1, i + 1, running_loss / 400))
-            running_loss = 0.0
+                    (epoch + 1, i + 1, running_loss / PRINT_SIZE))
+                running_loss = 0.0
+            
         print('epoch '+str(epoch)+' finished! time: '+str(time.time()-t0))
         
             
