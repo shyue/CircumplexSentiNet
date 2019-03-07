@@ -16,8 +16,8 @@ import time
 
 EMBED_SIZE = 256
 KERNEL_SIZE = 5
-VALENCE_MODEL = "model_weights/valence_model"
-AROUSAL_MODEL = "model_weights/arousal_model"
+VALENCE_MODEL = "model_weights/valence_model_epoch"
+AROUSAL_MODEL = "model_weights/arousal_model_epoch"
 BATCH_SIZE = 1
 INPUT_SIZE = 100
 HIDDEN_SIZE = 1024
@@ -103,7 +103,9 @@ def train(file):
                 running_loss = 0.0
             
         print('epoch '+str(epoch)+' finished! time: '+str(time.time()-t0))
-        
+        if (epoch % 5 == 0):
+            torch.save(model_valence.state_dict(), VALENCE_MODEL+'_epoch'+str(epoch))
+            torch.save(model_arousal.state_dict(), AROUSAL_MODEL+'_epoch'+str(epoch))
             
     print('Finished Training')
     torch.save(model_valence.state_dict(), VALENCE_MODEL)
