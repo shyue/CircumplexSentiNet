@@ -9,15 +9,16 @@ import torch.nn.functional as F
 import torch.optim as optim
 from argparse import ArgumentParser
 import pandas as pd
-from models.BiLSTMCNN import BiLSTMCNN
+from models.MultitaskBiLSTMCNN import MultitaskBiLSTMCNN
 from vocab import *
 import random
 import time
 
 EMBED_SIZE = 256
 KERNEL_SIZE = 5
-VALENCE_MODEL = "model_weights/valence_model_epoch"
-AROUSAL_MODEL = "model_weights/arousal_model_epoch"
+VALENCE_MODEL = "model_weights/valence_model"
+AROUSAL_MODEL = "model_weights/arousal_model"
+MULTITASK_MODEL = "model_weights/multitask_model"
 BATCH_SIZE = 1
 INPUT_SIZE = 100
 HIDDEN_SIZE = 1024
@@ -39,16 +40,21 @@ def train(file):
     random.seed(42)
     
     
-    model_valence = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
-    model_arousal = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
+    #model_valence = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
+    #model_arousal = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
+    model = MultitaskBiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
     
     criterion_valence = nn.MSELoss()
     criterion_arousal = nn.MSELoss()
-    optimizer_valence = optim.Adam(model_valence.parameters(), lr=LEARNING_RATE)#, momentum=0.9)
-    optimizer_arousal = optim.Adam(model_arousal.parameters(), lr=LEARNING_RATE)#, momentum=0.9)
+    #optimizer_valence = optim.Adam(model_valence.parameters(), lr=LEARNING_RATE)#, momentum=0.9)
+    #optimizer_arousal = optim.Adam(model_arousal.parameters(), lr=LEARNING_RATE)#, momentum=0.9)
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)#, momentum=0.9)
     
+    """
     model_valence.train()
     model_arousal.train()
+    """
+    model.train()
     
     indexes = [i for i in range(len(sentences))]
     t0 = time.time()
@@ -74,20 +80,23 @@ def train(file):
             labels_arousal = torch.tensor(labels_arousal)
             
             # zero the parameter gradients
-            optimizer_valence.zero_grad()
-            optimizer_arousal.zero_grad()
-
-            # forward + backward + optimize
-            outputs_valence = model_valence(inputs, lengths)
-            outputs_arousal = model_arousal(inputs, lengths)
+            #optimizer_valence.zero_grad()
+            #optimizer_arousal.zero_grad()
+            optimizer.zero_grad()
             
-            loss_valence = criterion_valence(outputs_valence, labels_valence)
-            loss_arousal = criterion_arousal(outputs_arousal, labels_arousal)
+            # forward + backward + optimize
+            #outputs_valence = model_valence(inputs, lengths)
+            #outputs_arousal = model_arousal(inputs, lengths)
+            outputs = model(inputs, lengths)
+            
+            loss_valence = criterion_valence(outputs[0], labels_valence)
+            loss_arousal = criterion_arousal(outputs[1], labels_arousal)
             loss = loss_arousal+loss_valence
             loss.backward()
 
-            optimizer_valence.step()
-            optimizer_arousal.step()
+            #optimizer_valence.step()
+            #optimizer_arousal.step()
+            optimizer.step()
             
             # print statistics
             running_loss += loss.item()
@@ -104,12 +113,14 @@ def train(file):
             
         print('epoch '+str(epoch)+' finished! time: '+str(time.time()-t0))
         if (epoch % 5 == 0):
-            torch.save(model_valence.state_dict(), VALENCE_MODEL+'_epoch'+str(epoch))
-            torch.save(model_arousal.state_dict(), AROUSAL_MODEL+'_epoch'+str(epoch))
+            #torch.save(model_valence.state_dict(), VALENCE_MODEL+'_epoch'+str(epoch))
+            #torch.save(model_arousal.state_dict(), AROUSAL_MODEL+'_epoch'+str(epoch))
+            torch.save(model.state_dict(), MULTITASK_MODEL+'_epoch'+str(epoch))
             
     print('Finished Training')
-    torch.save(model_valence.state_dict(), VALENCE_MODEL)
-    torch.save(model_arousal.state_dict(), AROUSAL_MODEL)
+    torch.save(model.state_dict(), MULTITASK_MODEL+'_epoch'+str(epoch))
+    #torch.save(model_valence.state_dict(), VALENCE_MODEL)
+    #torch.save(model_arousal.state_dict(), AROUSAL_MODEL)
     print('Finished Saving Weights')
 
 def test(file):
@@ -122,7 +133,7 @@ def test(file):
     pad = [0.0 for i in range(INPUT_SIZE)]
     print("Finished loading vectors")
     
-    
+    """
     model_valence = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
     model_valence.load_state_dict(torch.load(VALENCE_MODEL))
     model_valence.eval()
@@ -130,6 +141,10 @@ def test(file):
     model_arousal = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
     model_arousal.load_state_dict(torch.load(AROUSAL_MODEL))
     model_arousal.eval()
+    """
+    model = MultitaskBiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
+    model.load_state_dict(torch.load(MULTITASK_MODEL))
+    model.eval()
     
     pred_valence = []
     pred_arousal = []
@@ -154,11 +169,12 @@ def test(file):
             labels_arousal = torch.tensor(labels_arousal)
             """
             
-            outputs_valence = model_valence(inputs, lengths)
-            outputs_arousal = model_arousal(inputs, lengths)
+            #outputs_valence = model_valence(inputs, lengths)
+            #outputs_arousal = model_arousal(inputs, lengths)
+            outputs = model(inputs, lengths)
             
-            pred_valence.append(outputs_valence.tolist())
-            pred_arousal.append(outputs_arousal.tolist())
+            pred_valence.append(outputs[0].tolist())
+            pred_arousal.append(outputs[1].tolist())
         
             
     print('Finished Testing: '+str(time.time()-t0))
