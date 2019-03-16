@@ -10,6 +10,8 @@ import torch.optim as optim
 from argparse import ArgumentParser
 import pandas as pd
 from models.MultitaskBiLSTMCNN import MultitaskBiLSTMCNN
+from models.BiLSTMCNN import BiLSTMCNN
+from models.MultitaskBiLSTMAttention import MultitaskBiLSTMAttention
 from vocab import *
 import random
 import time
@@ -19,13 +21,16 @@ KERNEL_SIZE = 5
 VALENCE_MODEL = "model_weights/valence_model"
 AROUSAL_MODEL = "model_weights/arousal_model"
 MULTITASK_MODEL = "model_weights/multitask_model"
+MULTITASK_ATT = "model_weights/multitask_att_model"
 BATCH_SIZE = 1
 INPUT_SIZE = 100
 HIDDEN_SIZE = 1024
 LEARNING_RATE = 0.001
-PRINT_SIZE = 200
+PRINT_SIZE = 1
 PREDICTION_OUTPUT = "data/test_output.csv"
 NUM_EPOCHS = 30
+HIDDEN_ATT = 350
+OUTPUT_ATT = 100
 
 def train(file):
     sentences = pd.read_csv(file).dropna()
@@ -42,7 +47,8 @@ def train(file):
     
     #model_valence = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
     #model_arousal = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
-    model = MultitaskBiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
+    #model = MultitaskBiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
+    model = MultitaskBiLSTMAttention(HIDDEN_ATT, OUTPUT_ATT, HIDDEN_SIZE, INPUT_SIZE)
     
     criterion_valence = nn.MSELoss()
     criterion_arousal = nn.MSELoss()
@@ -115,10 +121,10 @@ def train(file):
         if (epoch % 5 == 0):
             #torch.save(model_valence.state_dict(), VALENCE_MODEL+'_epoch'+str(epoch))
             #torch.save(model_arousal.state_dict(), AROUSAL_MODEL+'_epoch'+str(epoch))
-            torch.save(model.state_dict(), MULTITASK_MODEL+'_epoch'+str(epoch))
+            torch.save(model.state_dict(), MULTITASK_ATT+'_epoch'+str(epoch))
             
     print('Finished Training')
-    torch.save(model.state_dict(), MULTITASK_MODEL+'_epoch'+str(epoch))
+    torch.save(model.state_dict(), MULTITASK_ATT+'_epoch'+str(epoch))
     #torch.save(model_valence.state_dict(), VALENCE_MODEL)
     #torch.save(model_arousal.state_dict(), AROUSAL_MODEL)
     print('Finished Saving Weights')
@@ -141,9 +147,11 @@ def test(file):
     model_arousal = BiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
     model_arousal.load_state_dict(torch.load(AROUSAL_MODEL))
     model_arousal.eval()
+    
     """
-    model = MultitaskBiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
-    model.load_state_dict(torch.load(MULTITASK_MODEL))
+    #model = MultitaskBiLSTMCNN(EMBED_SIZE, KERNEL_SIZE, HIDDEN_SIZE, INPUT_SIZE)
+    model = MultitaskBiLSTMAttention(HIDDEN_ATT, OUTPUT_ATT, HIDDEN_SIZE, INPUT_SIZE)
+    model.load_state_dict(torch.load(MULTITASK_ATT+"_epoch0"))
     model.eval()
     
     pred_valence = []
@@ -169,12 +177,12 @@ def test(file):
             labels_arousal = torch.tensor(labels_arousal)
             """
             
-            #outputs_valence = model_valence(inputs, lengths)
-            #outputs_arousal = model_arousal(inputs, lengths)
-            outputs = model(inputs, lengths)
+            outputs_valence = model_valence(inputs, lengths)
+            outputs_arousal = model_arousal(inputs, lengths)
+            #outputs = model(inputs, lengths)
             
-            pred_valence.append(outputs[0].tolist())
-            pred_arousal.append(outputs[1].tolist())
+            pred_valence.append(outputs_valence.tolist())
+            pred_arousal.append(outputs_arousal.tolist())
         
             
     print('Finished Testing: '+str(time.time()-t0))
